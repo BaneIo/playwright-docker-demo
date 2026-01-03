@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: true,
   retries: 0,
   use: {
-    headless: false, // jer ti koristiš --headed
+    headless: true,
   },
   projects: [
     {
