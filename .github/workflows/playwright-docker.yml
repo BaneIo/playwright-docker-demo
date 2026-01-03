@@ -1,4 +1,4 @@
-name: Playwright Tests with Allure
+name: Docker Playwright Demo Test
 
 on:
   workflow_dispatch:
