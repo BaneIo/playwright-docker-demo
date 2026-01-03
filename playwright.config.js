@@ -7,6 +7,11 @@ export default defineConfig({
   use: {
     headless: true,
   },
+
+  reporter: [
+    ["html"],
+    ["allure-playwright", { outputFolder: "allure-results" }],
+  ],
   projects: [
     {
       name: "chromium",
