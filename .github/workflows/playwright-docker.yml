@@ -44,16 +44,17 @@ jobs:
       - name: Build and run tests in Docker
         run: |
           docker build -t playwright-demo .
-          if [ -z "${{ github.event.inputs.test_name }}" ]; then
-            docker run --name playwright-container \
-              -e BROWSER=${{ github.event.inputs.browser }} \
-              playwright-demo \
-              npx playwright test ${{ github.event.inputs.test_target }}
+          # Ako je izabrano "all", pokreće sve, ako je izabran jedan browser, pokreće samo taj projekt
+          if [ "${{ github.event.inputs.browser }}" = "all" ]; then
+            BROWSER_ARG=""
           else
-            docker run --name playwright-container \
-              -e BROWSER=${{ github.event.inputs.browser }} \
-              playwright-demo \
-              npx playwright test ${{ github.event.inputs.test_target }} -g "${{ github.event.inputs.test_name }}"
+            BROWSER_ARG="--project=${{ github.event.inputs.browser }}"
+          fi
+
+          if [ -z "${{ github.event.inputs.test_name }}" ]; then
+            docker run --name playwright-container playwright-demo npx playwright test ${{ github.event.inputs.test_target }} $BROWSER_ARG
+          else
+            docker run --name playwright-container playwright-demo npx playwright test ${{ github.event.inputs.test_target }} -g "${{ github.event.inputs.test_name }}" $BROWSER_ARG
           fi
 
       - name: Copy Allure Results from Docker
