@@ -1,0 +1,102 @@
+name: Playwright Tests with Allure
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_target:
+        description: 'The test file to run (use "." for all tests)'
+        required: true
+        default: "."
+      test_name:
+        description: "Optional: Name of a specific test to run within the file"
+        required: false
+        default: ""
+      browser:
+        description: "Browser to run tests on"
+        required: true
+        default: chromium
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+          - all
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Install Allure CLI
+        run: npm install -g allure-commandline
+
+      - name: Clean Allure Results
+        run: rm -rf allure-results allure-report
+
+      - name: Run Tests
+        env:
+          BROWSER: ${{ github.event.inputs.browser }}
+        run: |
+          if [ -z "${{ github.event.inputs.test_name }}" ]; then
+            npx playwright test ${{ github.event.inputs.test_target }}
+          else
+            npx playwright test ${{ github.event.inputs.test_target }} -g "${{ github.event.inputs.test_name }}"
+
+      - name: Generate Allure Report
+        run: npx allure generate allure-results --clean -o allure-report
+
+      - name: Upload Allure Report as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+          retention-days: 7
+
+      - name: Deploy Allure Report to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+
+      - name: Notify Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATUS="✅ SUCCESS"
+          else
+            STATUS="❌ FAILURE"
+          fi
+
+          curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"text\": \"*Playwright Tests Finished*\nStatus: $STATUS\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\" 
+          }" \
+          $SLACK_WEBHOOK_URL
+
+      - name: Build and run tests in Docker
+        run: |
+          docker build -t playwright-demo .
+          docker run --rm \
+           -e BROWSER=${{ github.event.inputs.browser }} \
+           -v ${{ github.workspace }}:/workspace \
+           playwright-demo \
+           npx playwright test ${{ github.event.inputs.test_target }}
