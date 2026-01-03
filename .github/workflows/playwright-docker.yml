@@ -24,6 +24,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   test:
@@ -44,7 +46,6 @@ jobs:
       - name: Build and run tests in Docker
         run: |
           docker build -t playwright-demo .
-          # Ako je izabrano "all", pokreće sve, ako je izabran jedan browser, pokreće samo taj projekt
           if [ "${{ github.event.inputs.browser }}" = "all" ]; then
             BROWSER_ARG=""
           else
@@ -65,22 +66,14 @@ jobs:
         if: always()
         run: |
           npm install -g allure-commandline
-          npx allure generate allure-results --clean -o allure-report
-
-      - name: Upload Allure Report as Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-report
-          path: allure-report
-          retention-days: 7
+          allure generate allure-results --clean -o allure-report
 
       - name: Deploy Allure Report to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report
+          publish_dir: ./allure-report
 
       - name: Notify Slack
         if: always()
@@ -93,8 +86,10 @@ jobs:
             STATUS="❌ FAILURE"
           fi
 
+          REPORT_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+
           curl -X POST -H 'Content-type: application/json' \
           --data "{
-            \"text\": \"*Playwright Docker Test Finished*\nStatus: $STATUS\nRepository: ${{ github.repository }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\" 
+            \"text\": \"*Playwright Docker Test Finished*\nStatus: $STATUS\nReport: $REPORT_URL\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\" 
           }" \
           $SLACK_WEBHOOK_URL
