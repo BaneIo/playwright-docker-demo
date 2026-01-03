@@ -41,28 +41,32 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: Install Allure CLI
-        run: npm install -g allure-commandline
-
-      - name: Clean Allure Results
-        run: rm -rf allure-results allure-report
-
-      - name: Run Tests
-        env:
-          BROWSER: ${{ github.event.inputs.browser }}
+      - name: Build and run tests in Docker
         run: |
+          docker build -t playwright-demo .
           if [ -z "${{ github.event.inputs.test_name }}" ]; then
-            npx playwright test ${{ github.event.inputs.test_target }}
+            docker run --name playwright-container \
+              -e BROWSER=${{ github.event.inputs.browser }} \
+              playwright-demo \
+              npx playwright test ${{ github.event.inputs.test_target }}
           else
-            npx playwright test ${{ github.event.inputs.test_target }} -g "${{ github.event.inputs.test_name }}"
+            docker run --name playwright-container \
+              -e BROWSER=${{ github.event.inputs.browser }} \
+              playwright-demo \
+              npx playwright test ${{ github.event.inputs.test_target }} -g "${{ github.event.inputs.test_name }}"
+
+      - name: Copy Allure Results from Docker
+        if: always()
+        run: docker cp playwright-container:/app/allure-results ./allure-results || echo "Results not found"
 
       - name: Generate Allure Report
-        run: npx allure generate allure-results --clean -o allure-report
+        if: always()
+        run: |
+          npm install -g allure-commandline
+          npx allure generate allure-results --clean -o allure-report
 
       - name: Upload Allure Report as Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
@@ -70,6 +74,7 @@ jobs:
           retention-days: 7
 
       - name: Deploy Allure Report to GitHub Pages
+        if: always()
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -88,15 +93,6 @@ jobs:
 
           curl -X POST -H 'Content-type: application/json' \
           --data "{
-            \"text\": \"*Playwright Tests Finished*\nStatus: $STATUS\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\" 
+            \"text\": \"*Playwright Docker Test Finished*\nStatus: $STATUS\nRepository: ${{ github.repository }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\" 
           }" \
           $SLACK_WEBHOOK_URL
-
-      - name: Build and run tests in Docker
-        run: |
-          docker build -t playwright-demo .
-          docker run --rm \
-           -e BROWSER=${{ github.event.inputs.browser }} \
-           -v ${{ github.workspace }}:/workspace \
-           playwright-demo \
-           npx playwright test ${{ github.event.inputs.test_target }}
