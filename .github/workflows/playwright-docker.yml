@@ -54,6 +54,7 @@ jobs:
               -e BROWSER=${{ github.event.inputs.browser }} \
               playwright-demo \
               npx playwright test ${{ github.event.inputs.test_target }} -g "${{ github.event.inputs.test_name }}"
+          fi
 
       - name: Copy Allure Results from Docker
         if: always()
